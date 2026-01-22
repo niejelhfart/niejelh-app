@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Fusion — Watch</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <nav class="nav">
+    <div class="logo" onclick="location.href='index.html'">FUSION</div>
+    <ul class="nav-links">
+      <li><a href="index.html">Home</a></li>
+      <li><a href="match.html">Matches</a></li>
+      <li><a href="watch.html">Watch</a></li>
+      <li><a href="community.html">Community</a></li>
+    </ul>
+  </nav>
+
+  <main class="watch-main">
+    <div class="watch-left">
+      <header class="watch-header">
+        <h2 id="watchTitle">Live Stream</h2>
+        <p id="watchPot" class="muted">Pot: $0</p>
+        <div class="watch-controls">
+          <select id="platformSelect" class="platform-select">
+            <option value="auto">Auto-detect</option>
+            <option value="youtube">YouTube</option>
+            <option value="twitch">Twitch</option>
+            <option value="kick">Kick</option>
+          </select>
+          <input id="channelInput" class="input" placeholder="Enter channel ID or full URL (optional)" />
+          <button class="btn" id="loadStreamBtn">Load</button>
+        </div>
+      </header>
+
+      <div id="playerWrapper" class="player-wrapper">
+        <div id="unsupported" class="unsupported">Missing or unsupported stream — use controls above or open with params.</div>
+        <iframe id="streamFrame" class="stream-frame" src="" allowfullscreen style="display:none"></iframe>
+      </div>
+    </div>
+
+    <aside class="chat-right">
+      <div class="chat-top">
+        <div id="viewerCount">👁 0</div>
+        <div class="engagement">
+          <button class="eng-btn" id="likeBtn">❤️ Like <span id="likeCount">0</span></button>
+          <button class="eng-btn" id="followBtn">⭐ Follow <span id="followCount">0</span></button>
+          <button class="eng-btn" id="tipBtn">💸 Tip</button>
+        </div>
+      </div>
+
+      <div class="chat-box">
+        <div id="messages" class="messages"></div>
+        <div class="chat-input">
+          <input id="chatMessage" placeholder="Type your message..." />
+          <button class="btn" id="sendBtn">Send</button>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- watch.js parses params, embeds stream, and wires chat/viewer placeholders -->
+  <script type="module" src="js/watch.js"></script>
+</body>
+</html>

@@ -1,0 +1,173 @@
+:root{
+  --bg:#050506; --accent:#00eaff; --accent2:#b44cff; --muted:#9ad7de; --card:#08121a;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+  background: linear-gradient(180deg,#050506 0%, #06060a 100%); color:#eaf9ff;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* NAV */
+.nav{display:flex;justify-content:space-between;align-items:center;padding:14px 28px;border-bottom:1px solid rgba(255,255,255,0.03);backdrop-filter: blur(6px);position:sticky;top:0;z-index:10}
+.logo{color:var(--accent);font-weight:900;letter-spacing:4px;cursor:pointer;text-shadow:0 0 14px rgba(0,234,255,0.12)}
+.nav-links{list-style:none;margin:0;padding:0;display:flex;gap:16px;align-items:center}
+.nav-links a{color:#e6f7fb;text-decoration:none;font-weight:700;opacity:0.95}
+
+/* HERO */
+.hero{text-align:center;padding:72px 20px 32px}
+.hero-title{font-size:46px;margin:6px 0;color:var(--accent2);text-shadow:0 6px 40px rgba(180,76,255,0.12)}
+.hero-sub{color:var(--muted);margin:8px 0 18px}
+.platform-row{display:flex;gap:10px;justify-content:center;align-items:center;margin-top:10px}
+.platform-btn{padding:8px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:var(--accent);cursor:pointer;font-weight:800}
+.platform-select{padding:8px;border-radius:8px;background:#071018;border:1px solid rgba(255,255,255,0.03);color:var(--muted)}
+.btn{padding:10px 18px;border-radius:10px;border:none;background:linear-gradient(90deg,var(--accent),var(--accent2));color:#021;font-weight:800;cursor:pointer;box-shadow:0 10px 30px rgba(0,0,0,0.6)}
+.btn.big{padding:14px 28px;border-radius:14px}
+
+/* Sections */
+.section{padding:36px 14px}
+.section-title{text-align:center;color:var(--accent);font-size:22px;margin-bottom:12px}
+
+/* Grid cards */
+.card-container{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px;max-width:1100px;margin:0 auto;padding:6px}
+.card{background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00));border-radius:12px;padding:16px;border:1px solid rgba(255,255,255,0.03);box-shadow:0 10px 30px rgba(0,0,0,0.6);text-align:center}
+.card-title{font-size:18px;color:var(--accent)}
+.card-sub{color:var(--muted);margin-top:8px}
+
+/* Match */
+.match-main{display:flex;justify-content:center;padding:80px 20px}
+.match-card{max-width:720px;background:var(--card);padding:22px;border-radius:12px;border:1px solid rgba(255,255,255,0.03);box-shadow:0 12px 36px rgba(0,0,0,0.6)}
+.input{width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:#071019;color:var(--muted);margin:8px 0}
+
+/* Watch layout */
+.watch-main{display:flex;gap:20px;padding:22px 28px;align-items:flex-start}
+.watch-left{flex:1;min-width:420px}
+.watch-header{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+.watch-controls{display:flex;gap:8px;align-items:center}
+.player-wrapper{background:#020306;border-radius:12px;padding:10px;min-height:420px;position:relative;overflow:hidden;border:1px solid rgba(255,255,255,0.02)}
+.stream-frame{width:100%;height:520px;border:none;display:block;background:#000}
+.unsupported{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);color:#d7d7d7;text-align:center;opacity:0.9}
+
+/* Chat right */
+.chat-right{width:360px;display:flex;flex-direction:column;gap:12px}
+.chat-top{display:flex;justify-content:space-between;align-items:center;color:var(--muted)}
+.engagement{display:flex;gap:8px}
+.eng-btn{background:transparent;border:1px solid rgba(255,255,255,0.04);padding:8px 12px;border-radius:8px;color:var(--muted);cursor:pointer}
+.chat-box{background:#07121a;border-radius:12px;padding:12px;height:520px;display:flex;flex-direction:column;gap:8px;border:1px solid rgba(255,255,255,0.02)}
+.messages{flex:1;overflow:auto;padding-right:6px}
+.messages div{background:linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));padding:8px;border-radius:6px;margin-bottom:8px;color:#e8f8ff}
+.chat-input{display:flex;gap:8px;margin-top:10px}
+.chat-input input{flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:#07121a;color:var(--muted)}
+
+/* Responsive */
+@media(max-width:900px){
+  .watch-main{flex-direction:column}
+  .chat-right{width:100%}
+  .stream-frame{height:360px}
+}
+
+/* COMMUNITY PAGE --------------------------------------- */
+
+.community-hero {
+  position: relative;
+  height: 60vh;
+  display: flex;
+  align-items: center;
+  padding: 0 6%;
+  background: radial-gradient(circle at top right, #3120ff33, #14003a 60%);
+}
+
+.glow-title {
+  font-size: 3.5rem;
+  color: #fff;
+  text-shadow: 0 0 25px #783bff, 0 0 60px #5a00ff;
+}
+
+.hero-sub {
+  margin-top: 10px;
+  font-size: 1.2rem;
+  opacity: 0.85;
+}
+
+.glow-btn {
+  margin-top: 20px;
+  padding: 14px 26px;
+  font-size: 1.1rem;
+  border-radius: 14px;
+  background: linear-gradient(90deg, #7b3bff, #3bd6ff);
+  color: white;
+  box-shadow: 0 0 20px #7d3bff;
+  border: none;
+  cursor: pointer;
+}
+
+.avatar-wrapper {
+  position: absolute;
+  right: 6%;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.hero-avatar {
+  width: 280px;
+  filter: drop-shadow(0 0 25px #7a23ff) drop-shadow(0 0 60px #4600a0);
+}
+
+.community-grid {
+  padding: 60px 6%;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-gap: 32px;
+}
+
+.glass-card {
+  background: rgba(255,255,255,0.02);
+  padding: 30px;
+  border-radius: 16px;
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.06);
+  box-shadow: 0 0 20px #2b0d7b33;
+}
+
+.glass-card.wide {
+  grid-column: span 2;
+}
+
+.creator-row {
+  display: flex;
+  gap: 14px;
+}
+
+.creator-icon {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: 2px solid #7a23ff;
+  box-shadow: 0 0 18px #7a23ff;
+}
+
+.game-row {
+  display: flex;
+  gap: 20px;
+}
+
+.game-card {
+  flex: 1;
+  text-align: center;
+}
+
+.game-logo {
+  width: 70px;
+  margin-bottom: 12px;
+}
+
+.calendar-img {
+  width: 100%;
+  opacity: 0.95;
+  margin: 10px 0 20px;
+}
+
+.event-list li {
+  margin: 8px 0;
+  opacity: 0.95;
+}

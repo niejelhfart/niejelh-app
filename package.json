@@ -1,0 +1,10 @@
+{
+  "name": "fusion-app",
+  "private": true,
+  "scripts": {
+    "emulators": "firebase emulators:start --import=./emulator-data --export-on-exit=./emulator-data"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.6.0"
+  }
+}

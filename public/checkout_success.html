@@ -1,0 +1,41 @@
+<!-- checkout_success.html -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Purchase Success</title></head>
+<body>
+  <h2>Purchase finishing...</h2>
+  <div id="message">Finalizing...</div>
+
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
+  <script src="/js/fusion-auth.js"></script> <!-- must initialize firebase and auth -->
+  <script>
+    // Wait for auth (user must be logged in) and finalize session
+    async function finalize(sessionId) {
+      const finalizeFn = firebase.functions().httpsCallable('finalizeCheckout');
+      try {
+        const res = await finalizeFn({ sessionId });
+        document.getElementById('message').innerText = res.data.success ? `Success! Added ${res.data.addedPoints} FP` : `Not finalized: ${res.data.reason || JSON.stringify(res.data)}`;
+      } catch (err) {
+        document.getElementById('message').innerText = 'Error finalizing: ' + (err.message || err);
+      }
+    }
+
+    const params = new URLSearchParams(location.search);
+    const sid = params.get('session_id');
+    if (!sid) {
+      document.getElementById('message').innerText = 'No session id provided';
+    } else {
+      // wait for auth to be ready
+      firebase.auth().onAuthStateChanged(user => {
+        if (!user) {
+          document.getElementById('message').innerText = 'Please sign in to complete your purchase';
+          return;
+        }
+        finalize(sid);
+      });
+    }
+  </script>
+</body>
+</html>

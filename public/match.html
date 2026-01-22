@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Place Bet</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <style>
+    body {
+      background: #0f0f0f;
+      color: white;
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+
+    .card {
+      background: #151515;
+      padding: 30px;
+      border-radius: 8px;
+      width: 360px;
+    }
+
+    h2 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    select, input, button {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 12px;
+      border-radius: 4px;
+      border: none;
+    }
+
+    button {
+      font-weight: bold;
+      cursor: pointer;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="card">
+    <h2>Steelers vs Bengals</h2>
+
+    <select id="team">
+      <option value="Steelers">Steelers (-110)</option>
+      <option value="Bengals">Bengals (-110)</option>
+    </select>
+
+    <input id="amount" type="number" placeholder="Bet Amount ($)" />
+
+    <button id="place-bet">Place Bet</button>
+  </div>
+
+  <script type="module" src="./firebase-init.js"></script>
+  <script type="module" src="./place-bets.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,153 @@
+body {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  background: radial-gradient(circle at top, #12004d, #04001a);
+  color: white;
+}
+
+.community-container {
+  width: 100%;
+  padding: 40px;
+  max-width: 1200px;
+  margin: auto;
+}
+
+/* HERO SECTION */
+.hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 60px;
+}
+
+.title {
+  font-size: 64px;
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: 0 0 30px #b56dff;
+}
+
+.subtitle {
+  margin-top: 12px;
+  opacity: 0.8;
+  font-size: 18px;
+}
+
+.glow-btn {
+  margin-top: 25px;
+  padding: 14px 32px;
+  border-radius: 12px;
+  border: none;
+  font-size: 18px;
+  background: #7e2bff;
+  color: white;
+  cursor: pointer;
+  box-shadow: 0 0 25px #7e2bff;
+}
+
+.hero-avatar img {
+  width: 260px;
+  filter: drop-shadow(0 0 45px #7d29ff);
+}
+
+/* CARD STYLE */
+.card {
+  background: rgba(255, 255, 255, 0.06);
+  padding: 25px;
+  border-radius: 20px;
+  backdrop-filter: blur(14px);
+  margin-bottom: 35px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.card h2 {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+
+.card ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.card ul li {
+  opacity: 0.85;
+  margin-bottom: 6px;
+}
+
+/* GRID LAYOUT */
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 25px;
+}
+
+/* FEATURED CREATORS */
+.creator-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.creator-row img {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  box-shadow: 0 0 14px #7e2bff;
+}
+
+/* CALENDAR */
+.calendar-box {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 18px;
+  border-radius: 14px;
+  margin-bottom: 15px;
+}
+
+.calendar-img {
+  width: 100%;
+}
+
+/* EVENTS LIST */
+.events-list p {
+  margin: 6px 0;
+  opacity: 0.85;
+}
+
+.events-list span {
+  font-weight: bold;
+}
+
+/* GAMES SECTION */
+.games-row {
+  display: flex;
+  gap: 25px;
+}
+
+.game-card {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 20px;
+  border-radius: 16px;
+  text-align: center;
+  flex: 1;
+}
+
+.game-card img {
+  height: 50px;
+  margin-bottom: 10px;
+}
+
+.game-card h3 {
+  margin: 6px 0;
+}
+
+.small-btn {
+  margin-top: 10px;
+  padding: 10px 26px;
+  background: #0047ff;
+  border: none;
+  border-radius: 10px;
+  color: white;
+  cursor: pointer;
+  box-shadow: 0 0 18px #0047ff;
+}

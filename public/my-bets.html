@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>My Bets | Fusion</title>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <style>
+    body {
+      margin: 0;
+      background: #0f0f0f;
+      color: #ffffff;
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      padding-top: 60px;
+    }
+
+    .container {
+      width: 420px;
+      background: #151515;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 0 25px rgba(0,0,0,0.6);
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 5px;
+    }
+
+    .tagline {
+      text-align: center;
+      color: #aaa;
+      margin-bottom: 25px;
+    }
+
+    .bet {
+      background: #1f1f1f;
+      padding: 15px;
+      border-radius: 6px;
+      margin-bottom: 12px;
+      font-size: 14px;
+    }
+
+    .bet strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .status {
+      margin-top: 8px;
+      font-weight: bold;
+    }
+
+    .open {
+      color: #f5c542;
+    }
+
+    .won {
+      color: #3ddc84;
+    }
+
+    .lost {
+      color: #ff4d4d;
+    }
+
+    .empty {
+      text-align: center;
+      color: #aaa;
+      margin-top: 40px;
+    }
+
+    .back {
+      margin-top: 25px;
+      width: 100%;
+      padding: 12px;
+      background: #ffffff;
+      color: #000;
+      border: none;
+      font-weight: bold;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+
+    .warning {
+      margin-top: 20px;
+      text-align: center;
+      font-size: 12px;
+      color: red;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="container">
+    <h1>MY BETS</h1>
+    <div class="tagline">Your active and past bets</div>
+
+    <div id="bets-list"></div>
+
+    <button class="back" onclick="window.location.href='match.html'">
+      Back to Matches
+    </button>
+
+    <div class="warning">
+      Running in emulator mode. Do not use production credentials.
+    </div>
+  </div>
+
+  <script type="module" src="./firebase-init.js"></script>
+  <script type="module" src="./my-bets.js"></script>
+
+</body>
+</html>

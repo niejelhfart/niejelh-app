@@ -1,0 +1,75 @@
+############################
+# Logs
+############################
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+firebase-debug.log*
+firebase-debug.*.log*
+firestore-debug.log
+firestore-debug.*.log*
+
+############################
+# Firebase
+############################
+.firebase/
+.emulator-ui/
+emulator-data/
+
+# Uncomment this if you'd like others to create their own Firebase project.
+# For teams, keep it commented so everyone shares the same project.
+# .firebaserc
+
+############################
+# Runtime data
+############################
+pids
+*.pid
+*.seed
+*.pid.lock
+
+############################
+# Coverage / build artifacts
+############################
+lib-cov
+coverage
+.nyc_output
+.grunt
+build/Release
+
+############################
+# Dependency directories
+############################
+node_modules/
+
+############################
+# Caches
+############################
+.npm
+.eslintcache
+.node_repl_history
+.yarn-integrity
+
+############################
+# Packaging
+############################
+*.tgz
+
+############################
+# Environment variables
+############################
+.env
+
+############################
+# Dataconnect
+############################
+.dataconnect
+
+############################
+# OS / editor junk
+############################
+.DS_Store
+.vscode/
+.idea/
