@@ -3,13 +3,7 @@ import path from "node:path";
 import admin from "firebase-admin";
 
 const DEFAULTS = {
-  target: "emulator",
-  projectId: process.env.GCLOUD_PROJECT || "fusionapp-13e36",
-  apiKey: process.env.API_KEY || process.env.FIREBASE_API_KEY || "",
-  usersFile: "",
-  noSignup: false,
   seed: "fusion-n2-flood",
-  maxInflight: 100,
   users: 100,
   phase1BetsPerUser: 10,
   phase2LogicalBets: 300,
@@ -30,27 +24,24 @@ const DEFAULTS = {
 };
 
 const EPSILON = 0.0001;
-const EMULATOR_API_KEY = "fake-api-key";
-const DEFAULT_AUTH_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST || "127.0.0.1:9099";
-const DEFAULT_FIRESTORE_HOST = process.env.FIRESTORE_EMULATOR_HOST || "127.0.0.1:8080";
-let FUNCTIONS_BASE = "";
+const API_KEY = "fake-api-key";
+const PROJECT_ID = process.env.GCLOUD_PROJECT || "fusionapp-13e36";
+const AUTH_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST || "127.0.0.1:9099";
+const FIRESTORE_HOST = process.env.FIRESTORE_EMULATOR_HOST || "127.0.0.1:8080";
+const FUNCTIONS_BASE =
+  process.env.FUNCTIONS_BASE_URL || `http://127.0.0.1:5001/${PROJECT_ID}/us-central1`;
+
+process.env.GCLOUD_PROJECT = PROJECT_ID;
+process.env.GOOGLE_CLOUD_PROJECT = PROJECT_ID;
+process.env.FIREBASE_AUTH_EMULATOR_HOST = AUTH_HOST;
+process.env.FIRESTORE_EMULATOR_HOST = FIRESTORE_HOST;
 
 function parseArgs(argv) {
   const cfg = { ...DEFAULTS };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
-    if (!k.startsWith("--")) continue;
-    if (k === "--no-signup") {
-      cfg.noSignup = true;
-      continue;
-    }
     const v = argv[i + 1];
-    if (v == null) continue;
-    if (k === "--target") cfg.target = String(v);
-    if (k === "--project-id") cfg.projectId = String(v);
-    if (k === "--api-key") cfg.apiKey = String(v);
-    if (k === "--users-file") cfg.usersFile = String(v);
-    if (k === "--max-inflight") cfg.maxInflight = Number(v);
+    if (!k.startsWith("--") || v == null) continue;
     if (k === "--seed") cfg.seed = String(v);
     if (k === "--out-summary") cfg.outSummary = String(v);
     if (k === "--out-log") cfg.outLog = String(v);
@@ -87,21 +78,6 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function runWithLimit(items, limit, worker) {
-  const arr = Array.isArray(items) ? items : [];
-  if (arr.length === 0) return;
-  const n = Math.max(1, Math.min(arr.length, Number.isFinite(limit) ? Math.floor(limit) : 1));
-  let next = 0;
-  const runners = Array.from({ length: n }, async () => {
-    while (true) {
-      const idx = next++;
-      if (idx >= arr.length) return;
-      await worker(arr[idx], idx);
-    }
-  });
-  await Promise.all(runners);
-}
-
 async function ensureDirs(filepaths) {
   const dirs = [...new Set(filepaths.map((f) => path.dirname(f)))];
   await Promise.all(dirs.map((d) => fs.mkdir(d, { recursive: true })));
@@ -111,29 +87,8 @@ async function appendLog(logPath, line) {
   await fs.appendFile(logPath, `${line}\n`, "utf8");
 }
 
-function getAuthBaseAndKey(cfg) {
-  const isStaging = cfg.target === "staging";
-  if (isStaging) {
-    if (!cfg.projectId) throw new Error("--project-id is required when --target staging");
-    if (!cfg.apiKey) {
-      throw new Error(
-        "--api-key is required when --target staging (or set API_KEY / FIREBASE_API_KEY env var)"
-      );
-    }
-    return {
-      authBase: "https://identitytoolkit.googleapis.com",
-      apiKey: cfg.apiKey,
-    };
-  }
-  return {
-    authBase: `http://${DEFAULT_AUTH_HOST}/identitytoolkit.googleapis.com`,
-    apiKey: EMULATOR_API_KEY,
-  };
-}
-
-async function authSignUp(email, password, cfg) {
-  const { authBase, apiKey } = getAuthBaseAndKey(cfg);
-  const url = `${authBase}/v1/accounts:signUp?key=${apiKey}`;
+async function authSignUp(email, password) {
+  const url = `http://${AUTH_HOST}/identitytoolkit.googleapis.com/v1/accounts:signUp?key=${API_KEY}`;
   const res = await fetch(url, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -146,9 +101,8 @@ async function authSignUp(email, password, cfg) {
   return json;
 }
 
-async function authSignIn(email, password, cfg) {
-  const { authBase, apiKey } = getAuthBaseAndKey(cfg);
-  const url = `${authBase}/v1/accounts:signInWithPassword?key=${apiKey}`;
+async function authSignIn(email, password) {
+  const url = `http://${AUTH_HOST}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${API_KEY}`;
   const res = await fetch(url, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -159,46 +113,9 @@ async function authSignIn(email, password, cfg) {
   return json;
 }
 
-function parseAuthErrorCode(err) {
-  const msg = String(err?.message || "");
-  const marker = "\"message\":\"";
-  const i = msg.indexOf(marker);
-  if (i === -1) return "";
-  const start = i + marker.length;
-  const end = msg.indexOf("\"", start);
-  if (end === -1) return "";
-  return msg.slice(start, end).trim();
-}
-
-async function getUserToken(email, password, cfg, opts = {}) {
-  const allowSignup = opts.allowSignup !== false;
-  // Small pacing to avoid Auth anti-abuse burst signatures.
-  await sleep(30);
-
-  // Sign-in first for deterministic account reuse across runs.
-  try {
-    return await authSignIn(email, password, cfg);
-  } catch (err) {
-    const code = parseAuthErrorCode(err);
-    if (code !== "EMAIL_NOT_FOUND" && code !== "INVALID_LOGIN_CREDENTIALS") throw err;
-    if (!allowSignup) {
-      throw new Error(
-        `signIn failed and signUp disabled for ${email}: ${String(code || "UNKNOWN_AUTH_ERROR")}`
-      );
-    }
-  }
-
-  // Create only if missing.
-  await sleep(30);
-  try {
-    await authSignUp(email, password, cfg);
-  } catch (err) {
-    const code = parseAuthErrorCode(err);
-    // If account already exists, proceed to sign-in retry.
-    if (code !== "EMAIL_EXISTS") throw err;
-  }
-  await sleep(30);
-  return authSignIn(email, password, cfg);
+async function getUserToken(email, password) {
+  await authSignUp(email, password);
+  return authSignIn(email, password);
 }
 
 function classifyError(err) {
@@ -325,85 +242,25 @@ async function seedOpenMatch(db, matchId, cfg) {
 
 async function main() {
   const cfg = parseArgs(process.argv.slice(2));
-  const isStaging = cfg.target === "staging";
-  if (cfg.target !== "emulator" && cfg.target !== "staging") {
-    throw new Error("--target must be emulator or staging");
-  }
-  if (!Number.isFinite(cfg.maxInflight) || cfg.maxInflight < 1) {
-    throw new Error("--max-inflight must be a positive number");
-  }
-
-  if (isStaging) {
-    delete process.env.FIREBASE_AUTH_EMULATOR_HOST;
-    delete process.env.FIRESTORE_EMULATOR_HOST;
-  } else {
-    process.env.FIREBASE_AUTH_EMULATOR_HOST = DEFAULT_AUTH_HOST;
-    process.env.FIRESTORE_EMULATOR_HOST = DEFAULT_FIRESTORE_HOST;
-  }
-  if (cfg.noSignup && !cfg.usersFile) {
-    throw new Error("--no-signup requires --users-file with pre-provisioned credentials");
-  }
-
-  process.env.GCLOUD_PROJECT = cfg.projectId;
-  process.env.GOOGLE_CLOUD_PROJECT = cfg.projectId;
-
-  FUNCTIONS_BASE =
-    process.env.FUNCTIONS_BASE_URL ||
-    `http://127.0.0.1:5001/${cfg.projectId}/us-central1`;
-
-  if (isStaging && !process.env.FUNCTIONS_BASE_URL) {
-    throw new Error("FUNCTIONS_BASE_URL is required when --target staging");
-  }
-
   const rand = mulberry32(Number.parseInt(cfg.runTag.slice(1), 16));
   await ensureDirs([cfg.outSummary, cfg.outLog]);
   await fs.writeFile(cfg.outLog, "", "utf8");
   await appendLog(cfg.outLog, `[n2] config: ${JSON.stringify(cfg)}`);
 
-  if (!admin.apps.length) admin.initializeApp({ projectId: cfg.projectId });
+  if (!admin.apps.length) admin.initializeApp({ projectId: PROJECT_ID });
   const db = admin.firestore();
 
-  const plannedUsers = [];
-  if (cfg.usersFile) {
-    const raw = await fs.readFile(cfg.usersFile, "utf8");
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      throw new Error("--users-file must contain a non-empty JSON array");
-    }
-    for (const item of parsed.slice(0, cfg.users)) {
-      const email = String(item?.email || "").trim();
-      const password = String(item?.password || "FusionSim!123");
-      if (!email) throw new Error("users-file entry missing email");
-      plannedUsers.push({ email, password });
-    }
-    if (plannedUsers.length < cfg.users) {
-      throw new Error(
-        `users-file has ${plannedUsers.length} users but cfg.users=${cfg.users}`
-      );
-    }
-  } else {
-    for (let i = 0; i < cfg.users; i++) {
-      plannedUsers.push({
-        email: `sim_n2_user_${cfg.runTag}_${i}@fusion.local`,
-        password: "FusionSim!123",
-      });
-    }
-  }
-
-  // Reuse the first participant as admin to avoid creating an extra account.
-  const adminAccount = plannedUsers[0];
-  const adminCred = await getUserToken(adminAccount.email, adminAccount.password, cfg, {
-    allowSignup: !cfg.noSignup,
-  });
+  const adminEmail = `sim_n2_admin_${cfg.runTag}@fusion.local`;
+  const adminPassword = "FusionSim!123";
+  const adminCred = await getUserToken(adminEmail, adminPassword);
   await admin.auth().setCustomUserClaims(adminCred.localId, { admin: true });
-  const adminSignedIn = await authSignIn(adminAccount.email, adminAccount.password, cfg);
+  const adminSignedIn = await authSignIn(adminEmail, adminPassword);
   const adminToken = adminSignedIn.idToken;
 
   const users = [];
-  for (const u of plannedUsers) {
-    const cred = await getUserToken(u.email, u.password, cfg, {
-      allowSignup: !cfg.noSignup,
-    });
+  for (let i = 0; i < cfg.users; i++) {
+    const email = `sim_n2_user_${cfg.runTag}_${i}@fusion.local`;
+    const cred = await getUserToken(email, "FusionSim!123");
     users.push({ uid: cred.localId, idToken: cred.idToken });
     await db.doc(`users/${cred.localId}`).set(
       {
@@ -466,7 +323,8 @@ async function main() {
       p1Tasks.push({ user, team, amount, key });
     }
   }
-  await runWithLimit(p1Tasks, cfg.maxInflight, async (t) => {
+  await Promise.all(
+    p1Tasks.map(async (t) => {
       totalRequests++;
       phase1.requests++;
       const res = await callCallable("placeBet", t.user.idToken, {
@@ -487,7 +345,8 @@ async function main() {
       runBetIds.add(betId);
       runIdempotency.set(t.key, betId);
       if (res.data?.replayed) replayedResponses++;
-  });
+    })
+  );
   await appendLog(cfg.outLog, `[n2][phase1] ${JSON.stringify(phase1)}`);
 
   // Phase 2: retry amplification storm
@@ -504,43 +363,42 @@ async function main() {
     const key = `n2_p2_${cfg.runTag}_${i}`;
     p2Logical.push({ user, team, amount, burst, key });
   }
-  const phase2OuterInflight = Math.max(
-    1,
-    Math.floor(cfg.maxInflight / Math.max(1, cfg.phase2BurstMax))
-  );
-  await runWithLimit(p2Logical, phase2OuterInflight, async (b) => {
+  await Promise.all(
+    p2Logical.map(async (b) => {
       const betIds = new Set();
-      const burstIndices = Array.from({ length: b.burst }, (_, i) => i);
-      await runWithLimit(
-        burstIndices,
-        Math.min(cfg.maxInflight, b.burst),
-        async () => {
-          await sleep(intBetween(rand, 0, 250));
-          totalRequests++;
-          phase2.calls++;
-          const res = await callCallable("placeBet", b.user.idToken, {
-            matchId: m2,
-            team: b.team,
-            amount: b.amount,
-            idempotencyKey: b.key,
-          });
-          durations.push(res.durationMs);
-          if (!res.ok) {
-            phase2.errors++;
-            bumpErr(res.error);
-            return;
-          }
-          if (res.data?.replayed) replayedResponses++;
-          const betId = String(res.data?.betId || "");
-          if (betId) {
-            betIds.add(betId);
-            runBetIds.add(betId);
-            runIdempotency.set(b.key, betId);
-          }
-        }
-      );
+      const burstCalls = [];
+      for (let j = 0; j < b.burst; j++) {
+        burstCalls.push(
+          (async () => {
+            await sleep(intBetween(rand, 0, 250));
+            totalRequests++;
+            phase2.calls++;
+            const res = await callCallable("placeBet", b.user.idToken, {
+              matchId: m2,
+              team: b.team,
+              amount: b.amount,
+              idempotencyKey: b.key,
+            });
+            durations.push(res.durationMs);
+            if (!res.ok) {
+              phase2.errors++;
+              bumpErr(res.error);
+              return;
+            }
+            if (res.data?.replayed) replayedResponses++;
+            const betId = String(res.data?.betId || "");
+            if (betId) {
+              betIds.add(betId);
+              runBetIds.add(betId);
+              runIdempotency.set(b.key, betId);
+            }
+          })()
+        );
+      }
+      await Promise.all(burstCalls);
       if (betIds.size > 1) phase2.multiDebitDetected++;
-  });
+    })
+  );
   await appendLog(cfg.outLog, `[n2][phase2] ${JSON.stringify(phase2)}`);
 
   // Phase 3: settlement race condition
@@ -571,11 +429,8 @@ async function main() {
     }
   }
   const winner3 = rand() < 0.5 ? cfg.teamA : cfg.teamB;
-  const phase3SettleAttempts = Array.from({ length: cfg.phase3SettleCalls }, (_, i) => i);
-  await runWithLimit(
-    phase3SettleAttempts,
-    Math.min(cfg.maxInflight, cfg.phase3SettleCalls),
-    async () => {
+  await Promise.all(
+    Array.from({ length: cfg.phase3SettleCalls }).map(async (_, i) => {
       await sleep(intBetween(rand, 0, 120));
       totalRequests++;
       const res = await callCallable("settleMatch", adminToken, { matchId: m3, winner: winner3 });
@@ -592,7 +447,7 @@ async function main() {
           bumpErr(res.error);
         }
       }
-    }
+    })
   );
   await appendLog(cfg.outLog, `[n2][phase3] ${JSON.stringify(phase3)}`);
 
@@ -601,8 +456,8 @@ async function main() {
   const m4 = `sim-n2-${cfg.runTag}-phase4`;
   allMatchIds.add(m4);
   await seedOpenMatch(db, m4, cfg);
-  const phase4Items = Array.from({ length: cfg.phase4LogicalBets }, (_, i) => i);
-  await runWithLimit(phase4Items, cfg.maxInflight, async (_, i) => {
+  await Promise.all(
+    Array.from({ length: cfg.phase4LogicalBets }).map(async (_, i) => {
       const user = users[intBetween(rand, 0, users.length - 1)];
       const team = rand() < 0.5 ? cfg.teamA : cfg.teamB;
       const amount = intBetween(rand, cfg.minBet, cfg.maxBet);
@@ -642,7 +497,8 @@ async function main() {
         phase4.retryFailed++;
         bumpErr(second.error);
       }
-  });
+    })
+  );
   await appendLog(cfg.outLog, `[n2][phase4] ${JSON.stringify(phase4)}`);
 
   // Settle all open stress matches (except phase3 already raced) to validate credits.
@@ -733,7 +589,7 @@ async function main() {
   const summary = {
     seed: cfg.seed,
     runTag: cfg.runTag,
-    projectId: cfg.projectId,
+    projectId: PROJECT_ID,
     phases: { phase1, phase2, phase3, phase4, settleTail },
     telemetry: {
       totalRequests,
