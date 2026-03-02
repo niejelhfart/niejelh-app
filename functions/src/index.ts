@@ -33,6 +33,77 @@ function accountingStateRef(uid: string) {
   return db.doc(`users/${uid}/accounting/state`);
 }
 
+type InvariantSeverity = "critical" | "warning" | "info";
+
+type InvariantEventPayload = {
+  event: string;
+  severity: InvariantSeverity;
+  runId?: string;
+  requestId?: string;
+  uid?: string;
+  matchId?: string;
+  errorCode?: string | number | null;
+  errorMessage?: string | null;
+  timestamp?: number;
+  [key: string]: unknown;
+};
+
+function toInvariantErrorCode(value: unknown): string | number | null {
+  if (typeof value === "string" || typeof value === "number") return value;
+  return null;
+}
+
+function isCriticalRuntimeErrorCode(code: string | number | null): boolean {
+  if (typeof code === "number") {
+    return code === 13 || code === 8 || code === 2;
+  }
+  if (typeof code === "string") {
+    const normalized = code.toLowerCase();
+    return (
+      normalized === "internal" ||
+      normalized === "resource-exhausted" ||
+      normalized === "unknown" ||
+      normalized === "internal:internal"
+    );
+  }
+  return false;
+}
+
+async function emitInvariantEvent(payload: InvariantEventPayload): Promise<void> {
+  const errorCode = toInvariantErrorCode(payload.errorCode);
+  const eventRecord = {
+    ...payload,
+    errorCode,
+    invariantVersion: INVARIANT_VERSION,
+    timestamp: typeof payload.timestamp === "number" ? payload.timestamp : Date.now(),
+  };
+
+  console.log(JSON.stringify(eventRecord));
+
+  if (payload.severity !== "critical") return;
+
+  const rawId = [
+    String(eventRecord.event || "invariant_event"),
+    String(eventRecord.runId || "no_run"),
+    String(eventRecord.requestId || ""),
+    String(eventRecord.uid || ""),
+    String(eventRecord.matchId || ""),
+    String(eventRecord.timestamp || Date.now()),
+  ]
+    .filter(Boolean)
+    .join("_");
+  const anomalyId = rawId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 500);
+
+  await db.doc(`audit/anomalies/records/${anomalyId}`).set(
+    {
+      ...eventRecord,
+      detectedAt: nowTS(),
+      source: eventRecord.event,
+    },
+    { merge: true }
+  );
+}
+
 // ---------- Helpers ----------
 function isAdmin(ctx: functions.https.CallableContext) {
   return !!ctx.auth?.token?.admin;
@@ -440,20 +511,20 @@ export const placeBet = functions.https.onCall(async (data, ctx) => {
     return { ...result, message: "Bet placed successfully." };
   } catch (err: any) {
     const durationMs = Date.now() - startedAt;
-    console.log(
-      JSON.stringify({
-        event: "place_bet_failed",
-        invariantVersion: INVARIANT_VERSION,
-        uid,
-        matchId,
-        team,
-        amount,
-        durationMs,
-        errorCode: err?.code || null,
-        errorMessage: err?.message || String(err),
-        timestamp: Date.now(),
-      })
-    );
+    const errorCode = toInvariantErrorCode(err?.code);
+    await emitInvariantEvent({
+      event: "place_bet_failed",
+      severity: isCriticalRuntimeErrorCode(errorCode) ? "critical" : "warning",
+      uid,
+      matchId,
+      requestId: idempotencyKey,
+      team,
+      amount,
+      durationMs,
+      errorCode,
+      errorMessage: err?.message || String(err),
+      timestamp: Date.now(),
+    });
     throw err;
   }
 });
@@ -883,18 +954,18 @@ export const settleMatch = functions.https.onCall(async (data, ctx) => {
     return result;
   } catch (err: any) {
     const durationMs = Date.now() - startedAt;
-    console.log(
-      JSON.stringify({
-        event: "match_settlement_failed",
-        invariantVersion: INVARIANT_VERSION,
-        matchId,
-        adminUid: ctx.auth?.uid ?? null,
-        durationMs,
-        errorCode: err?.code || null,
-        errorMessage: err?.message || String(err),
-        timestamp: Date.now(),
-      })
-    );
+    const errorCode = toInvariantErrorCode(err?.code);
+    await emitInvariantEvent({
+      event: "match_settlement_failed",
+      severity: isCriticalRuntimeErrorCode(errorCode) ? "critical" : "warning",
+      matchId,
+      uid: ctx.auth?.uid ?? undefined,
+      runId,
+      durationMs,
+      errorCode,
+      errorMessage: err?.message || String(err),
+      timestamp: Date.now(),
+    });
     throw err;
   }
 });
@@ -962,14 +1033,10 @@ export const reconcileLedgerScheduled = functions.pubsub
 
         if (invalidWallet || invalidDeltaCount > 0 || Math.abs(drift) > RECON_EPSILON) {
           mismatches++;
-          const anomalyId = `${runId}_${uid}`.replace(/[^a-zA-Z0-9_-]/g, "_");
           const anomalyPayload = {
             type: "LEDGER_MISMATCH",
-            severity: "critical",
             source: "reconcileLedgerScheduled",
             invariantVersion: INVARIANT_VERSION,
-            runId,
-            uid,
             wallet,
             expectedWallet,
             ledgerSum,
@@ -980,18 +1047,17 @@ export const reconcileLedgerScheduled = functions.pubsub
             entryCount,
             invalidDeltaCount,
             checkedAt: Date.now(),
-            detectedAt: nowTS(),
           };
 
-          await db.doc(`audit/anomalies/records/${anomalyId}`).set(anomalyPayload, { merge: true });
-
-          console.error(
-            "LEDGER_MISMATCH",
-            JSON.stringify({
-              ...anomalyPayload,
-              anomalyId,
-            })
-          );
+          await emitInvariantEvent({
+            event: "LEDGER_MISMATCH",
+            severity: "critical",
+            runId,
+            uid,
+            errorCode: "LEDGER_MISMATCH",
+            errorMessage: "Wallet and ledger parity drift exceeded epsilon or invalid data detected.",
+            ...anomalyPayload,
+          });
         }
 
         checked++;
