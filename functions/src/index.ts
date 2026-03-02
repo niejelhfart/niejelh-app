@@ -136,6 +136,34 @@ async function assertAccountingVersionMonotonic(params: {
   );
 }
 
+type DuplicateLedgerSideEffectMeta = {
+  uid?: string;
+  matchId?: string;
+  requestId?: string;
+  runId?: string;
+  betId?: string;
+  ledgerEntryId?: string;
+  side?: "debit" | "credit";
+  source?: string;
+};
+
+function duplicateLedgerSideEffectError(meta: DuplicateLedgerSideEffectMeta) {
+  const err = new functions.https.HttpsError(
+    "internal",
+    "Duplicate ledger mutation detected."
+  ) as functions.https.HttpsError & {
+    duplicateLedgerSideEffect?: DuplicateLedgerSideEffectMeta;
+  };
+  err.duplicateLedgerSideEffect = meta;
+  return err;
+}
+
+function isDuplicateLedgerSideEffectError(
+  err: unknown
+): err is functions.https.HttpsError & { duplicateLedgerSideEffect: DuplicateLedgerSideEffectMeta } {
+  return !!(err && typeof err === "object" && "duplicateLedgerSideEffect" in err);
+}
+
 // ---------- Helpers ----------
 function isAdmin(ctx: functions.https.CallableContext) {
   return !!ctx.auth?.token?.admin;
@@ -440,6 +468,19 @@ export const placeBet = functions.https.onCall(async (data, ctx) => {
         { merge: true }
       );
 
+      const existingLedgerEntry = await tx.get(ledgerRef);
+      if (existingLedgerEntry.exists) {
+        throw duplicateLedgerSideEffectError({
+          uid,
+          matchId,
+          requestId: idempotencyKey,
+          betId,
+          ledgerEntryId: `bet_debit_${betId}`,
+          side: "debit",
+          source: "placeBet",
+        });
+      }
+
       tx.set(ledgerRef, {
         entryId: `bet_debit_${betId}`,
         ownerId: uid,
@@ -552,6 +593,25 @@ export const placeBet = functions.https.onCall(async (data, ctx) => {
 
     return { ...result, message: "Bet placed successfully." };
   } catch (err: any) {
+    if (isDuplicateLedgerSideEffectError(err)) {
+      const meta = err.duplicateLedgerSideEffect || {};
+      await emitInvariantEvent({
+        event: "DUPLICATE_LEDGER_SIDE_EFFECT",
+        severity: "critical",
+        uid: meta.uid,
+        matchId: meta.matchId,
+        requestId: meta.requestId,
+        runId: meta.runId,
+        errorCode: "DUPLICATE_LEDGER",
+        errorMessage: "Duplicate ledger mutation detected",
+        side: meta.side,
+        source: meta.source,
+        ledgerEntryId: meta.ledgerEntryId,
+        betId: meta.betId,
+      });
+      throw err;
+    }
+
     const durationMs = Date.now() - startedAt;
     const errorCode = toInvariantErrorCode(err?.code);
     await emitInvariantEvent({
@@ -876,8 +936,22 @@ export const settleMatch = functions.https.onCall(async (data, ctx) => {
               { merge: true }
             );
 
+            const settlementLedgerRef = db.doc(`users/${plan.ownerId}/ledger/settlement_${plan.betId}`);
+            const existingSettlementLedgerEntry = await tx.get(settlementLedgerRef);
+            if (existingSettlementLedgerEntry.exists) {
+              throw duplicateLedgerSideEffectError({
+                uid: plan.ownerId,
+                matchId,
+                runId,
+                betId: plan.betId,
+                ledgerEntryId: `settlement_${plan.betId}`,
+                side: "credit",
+                source: "settleMatch",
+              });
+            }
+
             tx.set(
-              db.doc(`users/${plan.ownerId}/ledger/settlement_${plan.betId}`),
+              settlementLedgerRef,
               {
                 entryId: `settlement_${plan.betId}`,
                 ownerId: plan.ownerId,
@@ -1003,6 +1077,25 @@ export const settleMatch = functions.https.onCall(async (data, ctx) => {
 
     return result;
   } catch (err: any) {
+    if (isDuplicateLedgerSideEffectError(err)) {
+      const meta = err.duplicateLedgerSideEffect || {};
+      await emitInvariantEvent({
+        event: "DUPLICATE_LEDGER_SIDE_EFFECT",
+        severity: "critical",
+        uid: meta.uid,
+        matchId: meta.matchId,
+        requestId: meta.requestId,
+        runId: meta.runId,
+        errorCode: "DUPLICATE_LEDGER",
+        errorMessage: "Duplicate ledger mutation detected",
+        side: meta.side,
+        source: meta.source,
+        ledgerEntryId: meta.ledgerEntryId,
+        betId: meta.betId,
+      });
+      throw err;
+    }
+
     const durationMs = Date.now() - startedAt;
     const errorCode = toInvariantErrorCode(err?.code);
     await emitInvariantEvent({
