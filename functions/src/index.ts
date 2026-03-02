@@ -104,6 +104,38 @@ async function emitInvariantEvent(payload: InvariantEventPayload): Promise<void>
   );
 }
 
+async function assertAccountingVersionMonotonic(params: {
+  event: string;
+  currentVersion: number;
+  nextVersion: number;
+  uid?: string;
+  matchId?: string;
+  requestId?: string;
+  runId?: string;
+}) {
+  const { event, currentVersion, nextVersion, uid, matchId, requestId, runId } = params;
+  const currentIsInt = Number.isInteger(currentVersion);
+  const nextIsInt = Number.isInteger(nextVersion);
+  const monotonic = currentIsInt && nextIsInt && nextVersion > currentVersion;
+  if (monotonic) return;
+
+  await emitInvariantEvent({
+    event,
+    severity: "critical",
+    uid,
+    matchId,
+    requestId,
+    runId,
+    errorCode: "VERSION_REGRESSION",
+    errorMessage: `Invariant violation: non-monotonic accountingVersion (current=${currentVersion}, next=${nextVersion}).`,
+  });
+
+  throw new functions.https.HttpsError(
+    "failed-precondition",
+    "Invariant violation: accounting version must be monotonic."
+  );
+}
+
 // ---------- Helpers ----------
 function isAdmin(ctx: functions.https.CallableContext) {
   return !!ctx.auth?.token?.admin;
@@ -371,11 +403,21 @@ export const placeBet = functions.https.onCall(async (data, ctx) => {
         updatedAt: nowTS(),
       };
 
+      const nextAccountingVersion = accountingVersion + 1;
+      await assertAccountingVersionMonotonic({
+        event: "place_bet_version_regression",
+        currentVersion: accountingVersion,
+        nextVersion: nextAccountingVersion,
+        uid,
+        matchId,
+        requestId: idempotencyKey,
+      });
+
       tx.set(
         acctRef,
         {
           wallet: wallet - amount,
-          accountingVersion: accountingVersion + 1,
+          accountingVersion: nextAccountingVersion,
           openExposureMinor: projectedUserOpenExposureMinor,
           updatedAt: nowTS(),
         },
@@ -809,6 +851,14 @@ export const settleMatch = functions.https.onCall(async (data, ctx) => {
             }
 
             const newVersion = state.accountingVersion + 1;
+            await assertAccountingVersionMonotonic({
+              event: "match_settlement_version_regression",
+              currentVersion: state.accountingVersion,
+              nextVersion: newVersion,
+              uid: plan.ownerId,
+              matchId,
+              runId,
+            });
             ownerState.set(plan.ownerId, {
               wallet: newWallet,
               accountingVersion: newVersion,
