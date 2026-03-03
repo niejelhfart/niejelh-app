@@ -712,8 +712,19 @@ export const settleMatch = functions.https.onCall(async (data, ctx) => {
   const CHUNK_SIZE = 80;
 
   try {
+    type SettlementLockResult =
+      | {
+          replayed: false;
+        }
+      | {
+          replayed: true;
+          status: string;
+          winner: string | null;
+          settlementRunId: string | null;
+        };
+
     // Lock match for this settlement run; preserve strict entry guard: only "open" can start.
-    await db.runTransaction(async (tx) => {
+    const lockResult: SettlementLockResult = await db.runTransaction(async (tx) => {
       const matchSnap = await tx.get(matchRef);
       if (!matchSnap.exists) {
         throw new functions.https.HttpsError("not-found", "Match not found.");
@@ -721,10 +732,18 @@ export const settleMatch = functions.https.onCall(async (data, ctx) => {
 
       const matchStatus = String(matchSnap.get("status") || "");
       if (matchStatus !== "open") {
-        throw new functions.https.HttpsError(
-          "failed-precondition",
-          "Match already settled or locked."
-        );
+        return {
+          replayed: true,
+          status: matchStatus || "unknown",
+          winner:
+            typeof matchSnap.get("winner") === "string"
+              ? String(matchSnap.get("winner"))
+              : null,
+          settlementRunId:
+            typeof matchSnap.get("settlementRunId") === "string"
+              ? String(matchSnap.get("settlementRunId"))
+              : null,
+        };
       }
 
       const probeQuery = db
@@ -751,7 +770,36 @@ export const settleMatch = functions.https.onCall(async (data, ctx) => {
         },
         { merge: true }
       );
+      return { replayed: false };
     });
+
+    if (lockResult.replayed) {
+      const durationMs = Date.now() - startedAt;
+      await emitInvariantEvent({
+        event: "match_settlement_replayed",
+        severity: "info",
+        matchId,
+        uid: ctx.auth?.uid ?? undefined,
+        runId,
+        errorCode: null,
+        errorMessage: `Settlement replay no-op (status=${lockResult.status}).`,
+        settlementStatus: lockResult.status,
+        settlementRunId: lockResult.settlementRunId,
+        winner: lockResult.winner,
+        durationMs,
+        timestamp: Date.now(),
+      });
+
+      return {
+        matchId,
+        replayed: true,
+        status: lockResult.status,
+        winner: lockResult.winner,
+        settled: 0,
+        chunksProcessed: 0,
+        message: "Settlement already finalized or in progress; no-op replay.",
+      };
+    }
 
     type SettlementPlan = {
       betId: string;
