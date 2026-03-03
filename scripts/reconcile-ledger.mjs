@@ -1,21 +1,16 @@
 import admin from "firebase-admin";
 
-const DEFAULT_PROJECT_ID = process.env.GCLOUD_PROJECT || "fusionapp-13e36";
+const DEFAULT_PROJECT_ID = process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || "";
+const DEFAULT_EMULATOR_PROJECT_ID = "fusionapp-13e36";
+const DEFAULT_FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
 const EPSILON = 0.0001;
-const AUTH_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST || "127.0.0.1:9099";
-const FIRESTORE_HOST = process.env.FIRESTORE_EMULATOR_HOST || "127.0.0.1:8080";
-
-// Force local emulator usage so ADC is never required.
-process.env.GCLOUD_PROJECT = DEFAULT_PROJECT_ID;
-process.env.GOOGLE_CLOUD_PROJECT = DEFAULT_PROJECT_ID;
-process.env.FIREBASE_AUTH_EMULATOR_HOST = AUTH_HOST;
-process.env.FIRESTORE_EMULATOR_HOST = FIRESTORE_HOST;
 
 function parseArgs(argv) {
   const out = {
     projectId: DEFAULT_PROJECT_ID,
     expectedOpeningWallet: 100,
     userLimit: 0,
+    useEmulator: false,
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -30,6 +25,8 @@ function parseArgs(argv) {
     } else if (key === "--user-limit" && val) {
       out.userLimit = Number(val);
       i++;
+    } else if (key === "--use-emulator") {
+      out.useEmulator = true;
     }
   }
   return out;
@@ -70,8 +67,38 @@ async function sumLedger(db, uid) {
 
 async function main() {
   const cfg = parseArgs(process.argv.slice(2));
-  admin.initializeApp({ projectId: cfg.projectId });
+  const envEmulatorHost = process.env.FIRESTORE_EMULATOR_HOST;
+  const useEmulator = cfg.useEmulator || Boolean(envEmulatorHost);
+  const firestoreEmulatorHost = envEmulatorHost || DEFAULT_FIRESTORE_EMULATOR_HOST;
+
+  let projectId = String(cfg.projectId || "").trim();
+  if (!projectId) {
+    projectId = useEmulator ? DEFAULT_EMULATOR_PROJECT_ID : "";
+  }
+  if (!projectId) {
+    throw new Error(
+      "--project-id is required when running against remote Firestore (non-emulator)."
+    );
+  }
+
+  process.env.GCLOUD_PROJECT = projectId;
+  process.env.GOOGLE_CLOUD_PROJECT = projectId;
+  if (useEmulator) {
+    process.env.FIRESTORE_EMULATOR_HOST = firestoreEmulatorHost;
+  } else {
+    delete process.env.FIRESTORE_EMULATOR_HOST;
+    delete process.env.FIREBASE_AUTH_EMULATOR_HOST;
+  }
+
+  admin.initializeApp({ projectId });
   const db = admin.firestore();
+  if (useEmulator) {
+    db.settings({ host: firestoreEmulatorHost, ssl: false });
+  }
+
+  console.log(
+    `reconcile target: ${useEmulator ? "emulator" : "remote"}, projectId=${projectId}, openingWallet=${cfg.expectedOpeningWallet}`
+  );
 
   let checkedUsers = 0;
   let mismatches = 0;
@@ -145,7 +172,7 @@ async function main() {
     JSON.stringify(
       {
         event: "ledger_reconciliation_summary",
-        projectId: cfg.projectId,
+        projectId,
         checkedUsers,
         mismatches,
         invalidUsers,
