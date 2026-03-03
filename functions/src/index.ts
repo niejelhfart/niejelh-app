@@ -260,11 +260,12 @@ export const placeBet = functions.https.onCall(async (data, ctx) => {
       const ledgerRef = db.doc(`users/${uid}/ledger/bet_debit_${betId}`);
       const idempotencyRef = db.doc(`users/${uid}/idempotency/${idempotencyKey}`);
 
-      const [acctSnap, matchSnap, idempotencySnap, shardSnap] = await Promise.all([
+      const [acctSnap, matchSnap, idempotencySnap, shardSnap, ledgerEntrySnap] = await Promise.all([
         tx.get(acctRef),
         tx.get(matchRef),
         tx.get(idempotencyRef),
         tx.get(shardRef),
+        tx.get(ledgerRef),
       ]);
 
       if (idempotencySnap.exists) {
@@ -441,6 +442,18 @@ export const placeBet = functions.https.onCall(async (data, ctx) => {
         requestId: idempotencyKey,
       });
 
+      if (ledgerEntrySnap.exists) {
+        throw duplicateLedgerSideEffectError({
+          uid,
+          matchId,
+          requestId: idempotencyKey,
+          betId,
+          ledgerEntryId: `bet_debit_${betId}`,
+          side: "debit",
+          source: "placeBet",
+        });
+      }
+
       tx.set(
         acctRef,
         {
@@ -467,19 +480,6 @@ export const placeBet = functions.https.onCall(async (data, ctx) => {
         },
         { merge: true }
       );
-
-      const existingLedgerEntry = await tx.get(ledgerRef);
-      if (existingLedgerEntry.exists) {
-        throw duplicateLedgerSideEffectError({
-          uid,
-          matchId,
-          requestId: idempotencyKey,
-          betId,
-          ledgerEntryId: `bet_debit_${betId}`,
-          side: "debit",
-          source: "placeBet",
-        });
-      }
 
       tx.set(ledgerRef, {
         entryId: `bet_debit_${betId}`,
@@ -937,8 +937,31 @@ export const settleMatch = functions.https.onCall(async (data, ctx) => {
           });
         }
 
+        const settlementLedgerExistsByBetId = new Map<string, boolean>();
+        for (const plan of plans) {
+          if (!(plan.didWin && plan.payout > 0)) continue;
+          const settlementLedgerRef = db.doc(
+            `users/${plan.ownerId}/ledger/settlement_${plan.betId}`
+          );
+          const settlementLedgerSnap = await tx.get(settlementLedgerRef);
+          settlementLedgerExistsByBetId.set(plan.betId, settlementLedgerSnap.exists);
+        }
+
         let settled = 0;
         for (const plan of plans) {
+          const settlementLedgerExists = settlementLedgerExistsByBetId.get(plan.betId) === true;
+          if (plan.didWin && settlementLedgerExists) {
+            throw duplicateLedgerSideEffectError({
+              uid: plan.ownerId,
+              matchId,
+              runId,
+              betId: plan.betId,
+              ledgerEntryId: `settlement_${plan.betId}`,
+              side: "credit",
+              source: "settleMatch",
+            });
+          }
+
           tx.update(db.doc(`bets/${plan.betId}`), plan.update);
           tx.set(db.doc(`users/${plan.ownerId}/bets/${plan.betId}`), plan.update, { merge: true });
 
@@ -985,19 +1008,6 @@ export const settleMatch = functions.https.onCall(async (data, ctx) => {
             );
 
             const settlementLedgerRef = db.doc(`users/${plan.ownerId}/ledger/settlement_${plan.betId}`);
-            const existingSettlementLedgerEntry = await tx.get(settlementLedgerRef);
-            if (existingSettlementLedgerEntry.exists) {
-              throw duplicateLedgerSideEffectError({
-                uid: plan.ownerId,
-                matchId,
-                runId,
-                betId: plan.betId,
-                ledgerEntryId: `settlement_${plan.betId}`,
-                side: "credit",
-                source: "settleMatch",
-              });
-            }
-
             tx.set(
               settlementLedgerRef,
               {
