@@ -202,6 +202,10 @@ function normalizedErrorCode(err: any): number | null {
 function isRetryableContentionError(err: any): boolean {
   const code = normalizedErrorCode(err);
   if (code === 10 || code === 4) return true;
+  if (code === 3) {
+    const msg = String(err?.message || "").toLowerCase();
+    return msg.includes("transaction is invalid or closed");
+  }
   if (code === 13) {
     const msg = String(err?.message || "").toLowerCase();
     return (
@@ -211,6 +215,28 @@ function isRetryableContentionError(err: any): boolean {
     );
   }
   return false;
+}
+
+function toPublicPlaceBetError(err: any): functions.https.HttpsError {
+  if (err instanceof functions.https.HttpsError) {
+    if (err.code === "internal") {
+      return new functions.https.HttpsError(
+        "unknown",
+        err.message || "Unexpected placeBet failure."
+      );
+    }
+    return err;
+  }
+
+  if (isRetryableContentionError(err)) {
+    return new functions.https.HttpsError(
+      "aborted",
+      "Transaction contention: please retry."
+    );
+  }
+
+  const message = err?.message ? String(err.message) : "Unexpected placeBet failure.";
+  return new functions.https.HttpsError("unknown", message);
 }
 
 // ---------- 0) Place bet callable ----------
@@ -609,7 +635,10 @@ export const placeBet = functions.https.onCall(async (data, ctx) => {
         ledgerEntryId: meta.ledgerEntryId,
         betId: meta.betId,
       });
-      throw err;
+      throw new functions.https.HttpsError(
+        "already-exists",
+        "Duplicate ledger mutation detected."
+      );
     }
 
     const durationMs = Date.now() - startedAt;
@@ -627,7 +656,7 @@ export const placeBet = functions.https.onCall(async (data, ctx) => {
       errorMessage: err?.message || String(err),
       timestamp: Date.now(),
     });
-    throw err;
+    throw toPublicPlaceBetError(err);
   }
 });
 
