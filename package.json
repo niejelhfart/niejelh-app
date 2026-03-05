@@ -2,9 +2,11 @@
   "name": "fusion-app",
   "private": true,
   "scripts": {
-    "emulators": "firebase emulators:start --import=./emulator-data --export-on-exit=./emulator-data"
+    "emulators": "firebase emulators:start --import=./emulator-data --export-on-exit=./emulator-data",
+    "reconcile:ledger": "node scripts/reconcile-ledger.mjs"
   },
   "dependencies": {
+    "firebase": "^12.10.0",
     "firebase-admin": "^13.6.0"
   }
 }

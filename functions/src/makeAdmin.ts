@@ -1,28 +1,30 @@
 import * as admin from "firebase-admin";
-export { syncAdminClaims } from "./syncAdminClaims";
 
-// MUST be before initializeApp
-process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
-process.env.GCLOUD_PROJECT = "fusionapp-13e36";
+/**
+ * Sets admin custom claims for a user.
+ * 
+ * Usage:
+ * NODE_ENV=development node lib/makeAdmin.js <email>
+ */
+export async function makeAdmin() {
+  const email = process.argv[2] || "niejelh@gmail.com";
 
-admin.initializeApp({
-  projectId: "fusionapp-13e36",
-});
+  if (!admin.apps.length) {
+    admin.initializeApp();
+  }
 
-async function makeAdmin() {
-  const email = "niejelh@gmail.com"; // 👈 NEVER changes
-
-  const user = await admin.auth().getUserByEmail(email);
-
-  await admin.auth().setCustomUserClaims(user.uid, {
-    admin: true,
-  });
-
-  console.log(`✅ Admin claim set for ${email} (${user.uid})`);
-  process.exit(0);
+  try {
+    const user = await admin.auth().getUserByEmail(email);
+    await admin.auth().setCustomUserClaims(user.uid, {
+      admin: true,
+    });
+    console.log(`✅ Admin claim set for ${email} (${user.uid})`);
+  } catch (err) {
+    console.error(`❌ Failed to set admin claim for ${email}:`, err);
+    process.exit(1);
+  }
 }
 
-makeAdmin().catch((err) => {
-  console.error("❌ Failed to set admin claim:", err);
-  process.exit(1);
-});
+if (require.main === module) {
+  makeAdmin().catch(console.error);
+}
