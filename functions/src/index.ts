@@ -169,6 +169,12 @@ function isAdmin(ctx: functions.https.CallableContext) {
   return !!ctx.auth?.token?.admin;
 }
 
+async function hasActiveAdminDoc(uid: string): Promise<boolean> {
+  const adminSnap = await db.doc(`admins/${uid}`).get();
+  if (!adminSnap.exists) return false;
+  return adminSnap.get("active") === true;
+}
+
 function calcPayout(amount: number, odds: number, didWin: boolean) {
   if (!didWin) return 0;
 
@@ -724,6 +730,9 @@ export const settleMatch = functions.https.onCall(async (data, ctx) => {
   if (!isAdmin(ctx)) {
     throw new functions.https.HttpsError("permission-denied", "Admin only.");
   }
+  if (!(await hasActiveAdminDoc(ctx.auth.uid))) {
+    throw new functions.https.HttpsError("permission-denied", "Admin privileges revoked or inactive.");
+  }
 
   const matchId = String(data?.matchId || "").trim();
   const winner = String(data?.winner || "").trim();
@@ -773,6 +782,18 @@ export const settleMatch = functions.https.onCall(async (data, ctx) => {
               ? String(matchSnap.get("settlementRunId"))
               : null,
         };
+      }
+
+      const matchOdds = matchSnap.get("odds");
+      if (
+        typeof matchOdds !== "object" ||
+        matchOdds === null ||
+        !Object.prototype.hasOwnProperty.call(matchOdds as Record<string, unknown>, winner)
+      ) {
+        throw new functions.https.HttpsError(
+          "invalid-argument",
+          "winner must match a configured match side."
+        );
       }
 
       const probeQuery = db
@@ -1341,3 +1362,4 @@ export const reconcileLedgerScheduled = functions.pubsub
  * This export expects you to have functions/src/makeAdmin.ts
  */
 export { makeAdmin } from "./makeAdmin";
+export { syncAdminClaims, syncAdminClaimsOnAdminWrite } from "./syncAdminClaims";

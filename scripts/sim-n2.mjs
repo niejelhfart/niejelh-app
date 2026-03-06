@@ -396,6 +396,14 @@ async function main() {
     allowSignup: !cfg.noSignup,
   });
   await admin.auth().setCustomUserClaims(adminCred.localId, { admin: true });
+  await db.doc(`admins/${adminCred.localId}`).set(
+    {
+      active: true,
+      role: "admin",
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
   const adminSignedIn = await authSignIn(adminAccount.email, adminAccount.password, cfg);
   const adminToken = adminSignedIn.idToken;
 

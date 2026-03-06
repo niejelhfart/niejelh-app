@@ -8,7 +8,7 @@ service cloud.firestore {
     }
 
     // 🔒 Admin-only data
-    match /admin/{document=**} {
+    match /admins/{document=**} {
       allow read, write: if isAdmin();
     }
 
