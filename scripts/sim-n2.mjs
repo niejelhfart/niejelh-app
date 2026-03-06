@@ -254,7 +254,8 @@ function classifyError(err) {
 }
 
 async function callCallable(name, idToken, data, opts = {}) {
-  const timeoutMs = Number(opts.timeoutMs || 0);
+  const parsedTimeout = Number(opts.timeoutMs);
+  const timeoutMs = Number.isFinite(parsedTimeout) && parsedTimeout > 0 ? parsedTimeout : 15000;
   const controller = timeoutMs > 0 ? new AbortController() : null;
   let timer = null;
   if (controller) {
