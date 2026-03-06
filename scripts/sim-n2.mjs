@@ -50,6 +50,7 @@ function parseArgs(argv) {
     if (k === "--project-id") cfg.projectId = String(v);
     if (k === "--api-key") cfg.apiKey = String(v);
     if (k === "--users-file") cfg.usersFile = String(v);
+    if (k === "--users") cfg.users = Number(v);
     if (k === "--max-inflight") cfg.maxInflight = Number(v);
     if (k === "--seed") cfg.seed = String(v);
     if (k === "--out-summary") cfg.outSummary = String(v);
